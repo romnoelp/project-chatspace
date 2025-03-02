@@ -1,5 +1,5 @@
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -17,6 +17,7 @@ export const useRealtime = (
   const { event = '*', schema = 'public', table, filter } = options;
 
   useEffect(() => {
+    // Updated channel configuration to properly use postgres_changes
     const channel = supabase
       .channel('schema-db-changes')
       .on(
@@ -75,8 +76,8 @@ export const useFilesRealtime = (projectId: string, callback: (payload: any) => 
 };
 
 export const useUserPresence = (room: string, userInfo: any) => {
-  const [channel, setChannel] = React.useState<RealtimeChannel | null>(null);
-  const [presentUsers, setPresentUsers] = React.useState<any[]>([]);
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
+  const [presentUsers, setPresentUsers] = useState<any[]>([]);
 
   useEffect(() => {
     if (!room || !userInfo?.id) return;
