@@ -336,6 +336,24 @@ export type Database = {
           },
         ]
       }
+      test_connection: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
           created_at: string | null
