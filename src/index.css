@@ -125,17 +125,8 @@
   }
 
   /* Animations */
-  .animate-fade-in {
-    @apply animate-fade-in;
-  }
-
-  .animate-slide-in {
-    @apply animate-slide-in;
-  }
-
-  .animate-scale-in {
-    @apply animate-scale-in;
-  }
+  /* Removed circular dependencies by eliminating redundant class definitions */
+  /* The animation classes are already defined in the Tailwind config */
 
   /* Hide scrollbar but allow scrolling */
   .scrollbar-hide {
