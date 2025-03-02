@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
 import { MoreHorizontal, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -27,21 +26,27 @@ interface ProjectCardProps {
       avatar?: string;
     }>;
     deadline?: string;
+    role?: 'admin' | 'member' | 'viewer';
   };
+  onDelete?: () => void;
+  onSelect?: () => void;
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onSelect }) => {
+  const isAdmin = project.role === 'admin';
+  
   return (
-    <div className="bg-card rounded-lg overflow-hidden border border-border shadow-sm hover:shadow-md transition-all duration-300 animate-fade-in">
+    <div 
+      className="bg-card rounded-lg overflow-hidden border border-border shadow-sm hover:shadow-md transition-all duration-300 animate-fade-in cursor-pointer"
+      onClick={onSelect}
+    >
       <div className="p-5">
         <div className="flex justify-between items-start mb-4">
-          <Link to={`/projects/${project.id}`} className="group">
-            <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
-              {project.name}
-            </h3>
-          </Link>
+          <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+            {project.name}
+          </h3>
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
@@ -49,14 +54,35 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Edit Project</DropdownMenuItem>
-              <DropdownMenuItem>Share Project</DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">Delete Project</DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onSelect && onSelect();
+              }}>
+                View Project
+              </DropdownMenuItem>
+              {isAdmin && (
+                <>
+                  <DropdownMenuItem>Edit Project</DropdownMenuItem>
+                  <DropdownMenuItem>Share Project</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete && onDelete();
+                    }}
+                  >
+                    Delete Project
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         
-        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">{project.description}</p>
+        <p className="text-muted-foreground text-sm line-clamp-2 mb-4">
+          {project.description || "No description provided."}
+        </p>
         
         <div className="flex flex-col gap-1 mb-4">
           <div className="flex justify-between text-sm">
@@ -79,6 +105,12 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
             {project.team.length > 3 && (
               <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-muted-foreground text-xs border-2 border-background">
                 +{project.team.length - 3}
+              </div>
+            )}
+            {project.team.length === 0 && (
+              <div className="flex items-center text-xs text-muted-foreground">
+                <Users className="h-4 w-4 mr-1" />
+                No members
               </div>
             )}
           </div>
