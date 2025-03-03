@@ -1,43 +1,18 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 
 const Login = () => {
-  const [connectionTest, setConnectionTest] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { signInWithGoogle, user } = useAuth();
 
-  // Test the Supabase connection
+  // Check if user is already logged in
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('test_connection')
-          .select('message')
-          .limit(1)
-          .single();
-        
-        if (error) {
-          console.error('Connection test error:', error);
-          setConnectionTest('Failed to connect to Supabase');
-        } else {
-          setConnectionTest(data.message);
-        }
-      } catch (e) {
-        console.error('Unexpected error:', e);
-        setConnectionTest('Failed to connect to Supabase');
-      }
-    };
-
-    testConnection();
-    
-    // Check if user is already logged in
     if (user) {
       navigate('/dashboard');
     }
@@ -66,18 +41,13 @@ const Login = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             Please sign in with your institutional email
           </p>
-          {connectionTest && (
-            <div className={`mt-2 text-xs p-2 rounded-md ${connectionTest.includes('successful') ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-              {connectionTest}
-            </div>
-          )}
         </div>
         
         <div className="bg-card border rounded-lg shadow-sm p-6">
           <div className="space-y-6">
             <div className="text-center">
               <p className="text-sm text-muted-foreground mb-4">
-                Sign in with your institutional email address (@company.edu)
+                Sign in with your institutional email address (@neu.edu.ph)
               </p>
               
               <Button 

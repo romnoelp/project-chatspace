@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { Building2, Plus, UserPlus } from 'lucide-react';
 
 const OrganizationOnboarding = () => {
-  const { user, profile, hasOrganization, createOrganization } = useAuth();
+  const { user, profile, hasOrganization, createOrganization, isOrgAdmin } = useAuth();
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [orgName, setOrgName] = useState('');
   const [orgDescription, setOrgDescription] = useState('');
@@ -23,13 +23,14 @@ const OrganizationOnboarding = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Check if user already has an organization
   useEffect(() => {
-    // If user already has an organization, redirect to dashboard
     if (hasOrganization) {
       navigate('/dashboard');
     }
   }, [hasOrganization, navigate]);
 
+  // Fetch existing organizations
   useEffect(() => {
     const fetchOrganizations = async () => {
       try {
@@ -41,7 +42,7 @@ const OrganizationOnboarding = () => {
         if (error) throw error;
         setOrganizations(data || []);
         
-        // Check if user has any pending join requests
+        // Check for pending join requests
         if (user) {
           const { data: requests, error: requestsError } = await supabase
             .from('organization_join_requests')
@@ -65,6 +66,7 @@ const OrganizationOnboarding = () => {
     fetchOrganizations();
   }, [user]);
 
+  // Handle creating a new organization
   const handleCreateOrganization = async () => {
     if (!orgName.trim()) {
       toast({
@@ -90,6 +92,7 @@ const OrganizationOnboarding = () => {
     }
   };
 
+  // Handle requesting to join an organization
   const handleRequestJoin = async (orgId: string) => {
     if (!user) return;
     
@@ -122,6 +125,10 @@ const OrganizationOnboarding = () => {
     }
   };
 
+  // Determine which tab to show as default based on admin status
+  const isAdmin = isOrgAdmin();
+  const defaultTab = isAdmin ? "create" : "join";
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <div className="mx-auto w-full max-w-md">
@@ -132,10 +139,10 @@ const OrganizationOnboarding = () => {
           </p>
         </div>
         
-        <Tabs defaultValue="join" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="join">Join Existing</TabsTrigger>
-            <TabsTrigger value="create">Create New</TabsTrigger>
+            {isAdmin && <TabsTrigger value="create">Create New</TabsTrigger>}
           </TabsList>
           
           <TabsContent value="join" className="mt-6">
@@ -168,7 +175,7 @@ const OrganizationOnboarding = () => {
                     ))
                   ) : (
                     <p className="text-center text-muted-foreground">
-                      No organizations found. Create a new one instead.
+                      No organizations found. {isAdmin ? "Create a new one instead." : "Please contact an administrator."}
                     </p>
                   )}
                 </div>
@@ -176,48 +183,50 @@ const OrganizationOnboarding = () => {
             </Card>
           </TabsContent>
           
-          <TabsContent value="create" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Create an Organization</CardTitle>
-                <CardDescription>
-                  Start a new organization and invite team members.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Organization Name</Label>
-                    <Input
-                      id="name"
-                      placeholder="Enter organization name"
-                      value={orgName}
-                      onChange={(e) => setOrgName(e.target.value)}
-                    />
+          {isAdmin && (
+            <TabsContent value="create" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Create an Organization</CardTitle>
+                  <CardDescription>
+                    Start a new organization and invite team members.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Organization Name</Label>
+                      <Input
+                        id="name"
+                        placeholder="Enter organization name"
+                        value={orgName}
+                        onChange={(e) => setOrgName(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description (Optional)</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Brief description of your organization"
+                        value={orgDescription}
+                        onChange={(e) => setOrgDescription(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description (Optional)</Label>
-                    <Textarea
-                      id="description"
-                      placeholder="Brief description of your organization"
-                      value={orgDescription}
-                      onChange={(e) => setOrgDescription(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  className="w-full" 
-                  onClick={handleCreateOrganization}
-                  disabled={loading || !orgName.trim()}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Organization
-                </Button>
-              </CardFooter>
-            </Card>
-          </TabsContent>
+                </CardContent>
+                <CardFooter>
+                  <Button 
+                    className="w-full" 
+                    onClick={handleCreateOrganization}
+                    disabled={loading || !orgName.trim()}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Organization
+                  </Button>
+                </CardFooter>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
