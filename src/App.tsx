@@ -9,6 +9,8 @@ import AuthGuard from "@/components/AuthGuard";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import DomainRestricted from "./pages/DomainRestricted";
+import OrganizationOnboarding from "./pages/OrganizationOnboarding";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +24,12 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/domain-restricted" element={<DomainRestricted />} />
+            <Route path="/organization-onboarding" element={
+              <AuthGuard>
+                <OrganizationOnboarding />
+              </AuthGuard>
+            } />
             <Route path="/dashboard" element={
               <AuthGuard>
                 <Dashboard />

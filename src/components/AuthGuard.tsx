@@ -7,7 +7,7 @@ interface AuthGuardProps {
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { user, loading, hasOrganization, hasValidDomain } = useAuth();
   const location = useLocation();
   
   if (loading) {
@@ -18,8 +18,19 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     );
   }
   
+  // If not logged in, redirect to login
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // If email domain is not valid, redirect to restricted page
+  if (!hasValidDomain) {
+    return <Navigate to="/domain-restricted" replace />;
+  }
+  
+  // If no organization and not on org onboarding page, redirect there
+  if (!hasOrganization && !location.pathname.includes('/organization-onboarding')) {
+    return <Navigate to="/organization-onboarding" replace />;
   }
 
   return <>{children}</>;
