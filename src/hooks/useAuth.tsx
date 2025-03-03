@@ -4,7 +4,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { useToast } from '@/components/ui/use-toast';
 
 // Allowed email domains - adjust this as needed
-const ALLOWED_DOMAINS = ['company.edu'];
+const ALLOWED_DOMAINS = ['neu.edu.ph'];
 
 type Profile = {
   id: string;

@@ -25,7 +25,7 @@ export function useRealtimeSubscription<T>(
     const channel = supabase
       .channel('schema-db-changes')
       .on(
-        'postgres_changes',
+        'postgres_changes' as any, // Type assertion to avoid TypeScript error
         {
           event: event,
           schema: schema,
