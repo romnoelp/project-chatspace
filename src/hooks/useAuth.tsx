@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
@@ -147,7 +146,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       
-      setOrganizationMemberships(data || []);
+      const typedData = data?.map(item => ({
+        ...item,
+        role: item.role as 'admin' | 'member' // Cast to ensure type compatibility
+      })) || [];
+      
+      setOrganizationMemberships(typedData);
     } catch (error) {
       console.error('Error fetching organization memberships:', error);
     }
