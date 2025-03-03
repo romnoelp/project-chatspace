@@ -7,7 +7,7 @@ interface AuthGuardProps {
 }
 
 const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
-  const { user, loading, hasOrganization, hasValidDomain } = useAuth();
+  const { user, loading, hasOrganization, hasValidDomain, isGlobalAdmin } = useAuth();
   const location = useLocation();
   
   if (loading) {
@@ -28,12 +28,28 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     return <Navigate to="/domain-restricted" replace />;
   }
   
+  // If global admin and trying to access admin panel, allow it
+  if (isGlobalAdmin && location.pathname === '/admin') {
+    return <>{children}</>;
+  }
+  
   // If no organization and not on org onboarding page, redirect there
   if (!hasOrganization && !location.pathname.includes('/organization-onboarding')) {
     return <Navigate to="/organization-onboarding" replace />;
   }
 
-  return <>{children}</>;
+  // If admin trying to access dashboard, allow
+  if (isGlobalAdmin) {
+    return <>{children}</>;
+  }
+
+  // Regular user with organization can access dashboard
+  if (hasOrganization) {
+    return <>{children}</>;
+  }
+
+  // Default case - should not reach here normally
+  return <Navigate to="/organization-onboarding" replace />;
 };
 
 export default AuthGuard;

@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,16 +9,22 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { Building2, Plus, UserPlus } from 'lucide-react';
+import { Building2, Plus, UserPlus, Copy } from 'lucide-react';
 
 const OrganizationOnboarding = () => {
-  const { user, profile, hasOrganization, createOrganization, isOrgAdmin } = useAuth();
-  const [organizations, setOrganizations] = useState<any[]>([]);
+  const { 
+    user, 
+    profile, 
+    hasOrganization, 
+    createOrganization, 
+    isGlobalAdmin,
+    organizationMemberships,
+    joinOrganizationWithCode
+  } = useAuth();
   const [orgName, setOrgName] = useState('');
   const [orgDescription, setOrgDescription] = useState('');
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [requestSent, setRequestSent] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -29,42 +34,6 @@ const OrganizationOnboarding = () => {
       navigate('/dashboard');
     }
   }, [hasOrganization, navigate]);
-
-  // Fetch existing organizations
-  useEffect(() => {
-    const fetchOrganizations = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('organizations')
-          .select('*')
-          .order('name');
-        
-        if (error) throw error;
-        setOrganizations(data || []);
-        
-        // Check for pending join requests
-        if (user) {
-          const { data: requests, error: requestsError } = await supabase
-            .from('organization_join_requests')
-            .select('organization_id')
-            .eq('user_id', user.id)
-            .eq('status', 'pending');
-            
-          if (!requestsError && requests) {
-            const pendingMap: Record<string, boolean> = {};
-            requests.forEach(req => {
-              pendingMap[req.organization_id] = true;
-            });
-            setRequestSent(pendingMap);
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching organizations:', error);
-      }
-    };
-    
-    fetchOrganizations();
-  }, [user]);
 
   // Handle creating a new organization
   const handleCreateOrganization = async () => {
@@ -92,42 +61,69 @@ const OrganizationOnboarding = () => {
     }
   };
 
-  // Handle requesting to join an organization
-  const handleRequestJoin = async (orgId: string) => {
-    if (!user) return;
+  // Handle joining an organization with code
+  const handleJoinWithCode = async () => {
+    if (!joinCode.trim()) {
+      toast({
+        title: "Join code required",
+        description: "Please enter a valid join code to continue.",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setLoading(true);
     
-    try {
-      const { error } = await supabase
-        .from('organization_join_requests')
-        .insert({
-          organization_id: orgId,
-          user_id: user.id
-        });
-        
-      if (error) throw error;
-      
-      setRequestSent(prev => ({ ...prev, [orgId]: true }));
-      
-      toast({
-        title: "Request sent",
-        description: "Your request to join this organization has been sent.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Request failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
+    const success = await joinOrganizationWithCode(joinCode.trim());
+    
+    setLoading(false);
+    
+    if (success) {
+      navigate('/dashboard');
     }
   };
 
-  // Determine which tab to show as default based on admin status
-  const isAdmin = isOrgAdmin();
-  const defaultTab = isAdmin ? "create" : "join";
+  // Show the join code for existing org admins so they can share with others
+  const getJoinCodesForAdmin = () => {
+    const adminOrgs = organizationMemberships
+      .filter(m => m.role === 'admin' && m.organization?.join_code)
+      .map(m => ({
+        name: m.organization!.name,
+        code: m.organization!.join_code
+      }));
+      
+    if (adminOrgs.length === 0) return null;
+      
+    return (
+      <div className="mt-6 space-y-4">
+        <h3 className="text-lg font-medium">Share Join Codes</h3>
+        <p className="text-sm text-muted-foreground">
+          Share these codes with users you want to invite to your organizations:
+        </p>
+        {adminOrgs.map((org, idx) => (
+          <div key={idx} className="flex items-center justify-between rounded-lg border p-4">
+            <div>
+              <span className="font-medium">{org.name}: </span>
+              <code className="bg-muted px-2 py-1 rounded">{org.code}</code>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(org.code || '');
+                toast({ title: "Copied to clipboard" });
+              }}
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  // Determine which tab to show as default
+  const defaultTab = isGlobalAdmin ? "create" : "join";
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -135,14 +131,16 @@ const OrganizationOnboarding = () => {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold">Welcome to CloudCast</h1>
           <p className="mt-2 text-muted-foreground">
-            {profile?.full_name || user?.email}, you need to join an organization to continue.
+            {profile?.full_name || user?.email}, {isGlobalAdmin 
+              ? "you can create a new organization or join an existing one." 
+              : "you need to join an organization to continue."}
           </p>
         </div>
         
         <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="join">Join Existing</TabsTrigger>
-            {isAdmin && <TabsTrigger value="create">Create New</TabsTrigger>}
+            <TabsTrigger value="join">Join Organization</TabsTrigger>
+            {isGlobalAdmin && <TabsTrigger value="create">Create New</TabsTrigger>}
           </TabsList>
           
           <TabsContent value="join" className="mt-6">
@@ -150,40 +148,36 @@ const OrganizationOnboarding = () => {
               <CardHeader>
                 <CardTitle>Join an Organization</CardTitle>
                 <CardDescription>
-                  Request access to an existing organization.
+                  Enter the join code provided by an organization admin.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {organizations.length > 0 ? (
-                    organizations.map(org => (
-                      <div key={org.id} className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <h3 className="font-medium">{org.name}</h3>
-                          {org.description && (
-                            <p className="text-sm text-muted-foreground">{org.description}</p>
-                          )}
-                        </div>
-                        <Button 
-                          onClick={() => handleRequestJoin(org.id)}
-                          disabled={loading || requestSent[org.id]}
-                          variant={requestSent[org.id] ? "outline" : "default"}
-                        >
-                          {requestSent[org.id] ? "Request Sent" : "Request to Join"}
-                        </Button>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-center text-muted-foreground">
-                      No organizations found. {isAdmin ? "Create a new one instead." : "Please contact an administrator."}
-                    </p>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="joinCode">Organization Join Code</Label>
+                    <Input
+                      id="joinCode"
+                      placeholder="Enter join code (e.g., AB12CD34)"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                    />
+                  </div>
                 </div>
               </CardContent>
+              <CardFooter>
+                <Button 
+                  className="w-full" 
+                  onClick={handleJoinWithCode}
+                  disabled={loading || !joinCode.trim()}
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Join Organization
+                </Button>
+              </CardFooter>
             </Card>
           </TabsContent>
           
-          {isAdmin && (
+          {isGlobalAdmin && (
             <TabsContent value="create" className="mt-6">
               <Card>
                 <CardHeader>
@@ -225,6 +219,8 @@ const OrganizationOnboarding = () => {
                   </Button>
                 </CardFooter>
               </Card>
+              
+              {getJoinCodesForAdmin()}
             </TabsContent>
           )}
         </Tabs>

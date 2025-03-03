@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
@@ -5,6 +6,9 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Allowed email domains - adjust this as needed
 const ALLOWED_DOMAINS = ['neu.edu.ph'];
+
+// Default admin email
+const DEFAULT_ADMIN_EMAIL = 'romnoel.petracorta@neu.edu.ph';
 
 type Profile = {
   id: string;
@@ -19,6 +23,7 @@ type Organization = {
   id: string;
   name: string;
   description: string | null;
+  join_code: string | null;
 };
 
 type OrganizationMember = {
@@ -38,10 +43,12 @@ type AuthContextType = {
   organizationMemberships: OrganizationMember[];
   hasOrganization: boolean;
   isOrgAdmin: (orgId?: string) => boolean;
+  isGlobalAdmin: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   createOrganization: (name: string, description?: string) => Promise<string | null>;
   fetchOrganizationMemberships: () => Promise<void>;
+  joinOrganizationWithCode: (code: string) => Promise<boolean>;
   hasValidDomain: boolean;
 };
 
@@ -53,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [organizationMemberships, setOrganizationMemberships] = useState<OrganizationMember[]>([]);
+  const [isGlobalAdmin, setIsGlobalAdmin] = useState(false);
   const { toast } = useToast();
 
   const hasValidDomain = user?.email ? ALLOWED_DOMAINS.some(domain => 
@@ -109,6 +117,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Check if user is a global admin
+  useEffect(() => {
+    if (user?.email === DEFAULT_ADMIN_EMAIL) {
+      setIsGlobalAdmin(true);
+    } else {
+      setIsGlobalAdmin(false);
+    }
+  }, [user]);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -235,17 +252,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const joinOrganizationWithCode = async (code: string): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      // Find the organization with the given join code
+      const { data: organizations, error: orgError } = await supabase
+        .from('organizations')
+        .select('id')
+        .eq('join_code', code);
+        
+      if (orgError) throw orgError;
+      
+      if (!organizations || organizations.length === 0) {
+        toast({
+          title: "Invalid Join Code",
+          description: "The join code you entered is invalid or has expired.",
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      const orgId = organizations[0].id;
+      
+      // Check if user is already a member
+      const { data: existingMember, error: memberCheckError } = await supabase
+        .from('organization_members')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('user_id', user.id);
+        
+      if (memberCheckError) throw memberCheckError;
+      
+      if (existingMember && existingMember.length > 0) {
+        toast({
+          title: "Already a Member",
+          description: "You are already a member of this organization.",
+          variant: "destructive"
+        });
+        return true; // Already a member is still a success case
+      }
+      
+      // Add user to organization as a regular member
+      const { error: joinError } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: orgId,
+          user_id: user.id,
+          role: 'member'
+        });
+        
+      if (joinError) throw joinError;
+      
+      toast({
+        title: "Organization Joined",
+        description: "You have successfully joined the organization.",
+      });
+      
+      // Refresh memberships
+      await fetchOrganizationMemberships();
+      return true;
+    } catch (error: any) {
+      toast({
+        title: "Failed to Join Organization",
+        description: error.message,
+        variant: "destructive"
+      });
+      return false;
+    }
+  };
+
   const createOrganization = async (name: string, description?: string): Promise<string | null> => {
     if (!user) return null;
     
     try {
+      // Generate a random 8-character join code
+      const joinCode = Array.from(Array(8), () => Math.floor(Math.random() * 36).toString(36)).join('').toUpperCase();
+      
       // Create the organization
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
         .insert({
           name,
           description,
-          created_by: user.id
+          created_by: user.id,
+          join_code: joinCode
         })
         .select('id')
         .single();
@@ -285,10 +376,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     organizationMemberships,
     hasOrganization,
     isOrgAdmin,
+    isGlobalAdmin,
     signOut,
     signInWithGoogle,
     createOrganization,
     fetchOrganizationMemberships,
+    joinOrganizationWithCode,
     hasValidDomain
   };
 
