@@ -281,6 +281,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           id: string
+          join_code: string | null
           name: string
           updated_at: string | null
         }
@@ -289,6 +290,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string | null
           name: string
           updated_at?: string | null
         }
@@ -297,6 +299,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
+          join_code?: string | null
           name?: string
           updated_at?: string | null
         }
@@ -580,6 +583,13 @@ export type Database = {
         Returns: boolean
       }
       is_org_member: {
+        Args: {
+          org_id: string
+          user_id: string
+        }
+        Returns: boolean
+      }
+      is_org_member_safe: {
         Args: {
           org_id: string
           user_id: string

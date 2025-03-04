@@ -1,333 +1,285 @@
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { Building2, Plus, UserPlus, Copy, RefreshCw } from 'lucide-react';
-import Navbar from '@/components/layout/Navbar';
-import Sidebar from '@/components/layout/Sidebar';
+import { PlusCircle, Trash2, Copy, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
+interface Organization {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  join_code: string | null;
+  member_count: number;
+}
 
 const AdminDashboard = () => {
-  const { user, isGlobalAdmin } = useAuth();
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const [organizations, setOrganizations] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const { isGlobalAdmin } = useAuth();
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [newOrgDescription, setNewOrgDescription] = useState('');
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [orgName, setOrgName] = useState('');
-  const [orgDescription, setOrgDescription] = useState('');
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const { toast } = useToast();
 
-  // Check if user is admin
   useEffect(() => {
-    if (!isGlobalAdmin) {
-      navigate('/dashboard');
-    }
-  }, [isGlobalAdmin, navigate]);
+    fetchOrganizations();
+  }, []);
 
-  // Fetch organizations and users
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch organizations
-        const { data: orgsData, error: orgsError } = await supabase
-          .from('organizations')
-          .select(`
-            *,
-            members:organization_members(count)
-          `)
-          .order('created_at', { ascending: false });
-
-        if (orgsError) throw orgsError;
-        setOrganizations(orgsData || []);
-
-        // Fetch profiles
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (usersError) throw usersError;
-        setUsers(usersData || []);
-      } catch (error: any) {
-        toast({
-          title: "Error fetching data",
-          description: error.message,
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [toast, refreshTrigger]);
-
-  const handleCreateOrganization = async () => {
-    if (!orgName.trim()) {
-      toast({
-        title: "Organization name required",
-        description: "Please enter a name for your organization.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
+  const fetchOrganizations = async () => {
     try {
-      // Generate a random 8-character join code
-      const joinCode = Array.from(Array(8), () => Math.floor(Math.random() * 36).toString(36)).join('').toUpperCase();
-      
-      // Create the organization
+      setLoading(true);
       const { data, error } = await supabase
         .from('organizations')
-        .insert({
-          name: orgName.trim(),
-          description: orgDescription.trim() || null,
-          created_by: user?.id,
-          join_code: joinCode
-        });
+        .select(`
+          *,
+          members:organization_members(count)
+        `);
 
       if (error) throw error;
 
-      toast({
-        title: "Organization created",
-        description: "The organization has been created successfully."
-      });
+      // Transform the data to include member count
+      const orgsWithCounts = data.map(org => ({
+        ...org,
+        member_count: org.members[0]?.count || 0
+      }));
 
-      // Reset form and refresh data
-      setOrgName('');
-      setOrgDescription('');
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
+      setOrganizations(orgsWithCounts);
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
       toast({
-        title: "Failed to create organization",
-        description: error.message,
-        variant: "destructive"
+        title: 'Error',
+        description: 'Failed to load organizations',
+        variant: 'destructive'
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const regenerateJoinCode = async (orgId: string) => {
-    try {
-      const newJoinCode = Array.from(Array(8), () => Math.floor(Math.random() * 36).toString(36)).join('').toUpperCase();
-      
-      const { error } = await supabase
-        .from('organizations')
-        .update({ join_code: newJoinCode })
-        .eq('id', orgId);
-        
-      if (error) throw error;
-      
+  const createOrganization = async () => {
+    if (!newOrgName.trim()) {
       toast({
-        title: "Join code regenerated",
-        description: "A new join code has been created for this organization."
+        title: 'Error',
+        description: 'Organization name is required',
+        variant: 'destructive'
       });
-      
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error: any) {
+      return;
+    }
+
+    try {
+      // Generate a random 8-character join code
+      const joinCode = Array.from(Array(8), () => Math.floor(Math.random() * 36).toString(36)).join('').toUpperCase();
+
+      const { data, error } = await supabase
+        .from('organizations')
+        .insert({
+          name: newOrgName.trim(),
+          description: newOrgDescription.trim() || null,
+          join_code: joinCode
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
       toast({
-        title: "Failed to regenerate join code",
-        description: error.message,
-        variant: "destructive"
+        title: 'Success',
+        description: 'Organization created successfully'
+      });
+
+      // Clear form and close dialog
+      setNewOrgName('');
+      setNewOrgDescription('');
+      setCreateDialogOpen(false);
+
+      // Refresh organizations list
+      fetchOrganizations();
+    } catch (error: any) {
+      console.error('Error creating organization:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to create organization: ${error.message}`,
+        variant: 'destructive'
       });
     }
   };
 
+  const deleteOrganization = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this organization? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Organization deleted successfully'
+      });
+
+      // Refresh organizations list
+      fetchOrganizations();
+    } catch (error: any) {
+      console.error('Error deleting organization:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to delete organization: ${error.message}`,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const copyJoinCode = (joinCode: string | null) => {
+    if (!joinCode) {
+      toast({
+        title: 'Error',
+        description: 'No join code available',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    navigator.clipboard.writeText(joinCode);
+    toast({
+      title: 'Success',
+      description: 'Join code copied to clipboard'
+    });
+  };
+
+  if (!isGlobalAdmin) {
+    return (
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+        <p>You do not have permission to view this page.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
-      <div className="flex-1 flex flex-col md:ml-64">
-        <Navbar toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-        
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
-          <div className="container mx-auto max-w-7xl">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setRefreshTrigger(prev => prev + 1)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh
+    <div className="container mx-auto p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Organization
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Organization</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label htmlFor="name" className="text-sm font-medium">
+                  Organization Name
+                </label>
+                <Input
+                  id="name"
+                  value={newOrgName}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                  placeholder="Enter organization name"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="description" className="text-sm font-medium">
+                  Description (Optional)
+                </label>
+                <Textarea
+                  id="description"
+                  value={newOrgDescription}
+                  onChange={(e) => setNewOrgDescription(e.target.value)}
+                  placeholder="Enter organization description"
+                  rows={3}
+                />
+              </div>
+              <Button onClick={createOrganization} className="w-full">
+                Create Organization
               </Button>
             </div>
-            
-            <Tabs defaultValue="organizations" className="space-y-6">
-              <TabsList>
-                <TabsTrigger value="organizations">Organizations</TabsTrigger>
-                <TabsTrigger value="users">Users</TabsTrigger>
-                <TabsTrigger value="create">Create Organization</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="organizations" className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {organizations.map((org) => (
-                    <Card key={org.id}>
-                      <CardHeader>
-                        <CardTitle>{org.name}</CardTitle>
-                        <CardDescription>
-                          {org.description || "No description provided"}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium">Join Code:</span>
-                            <div className="flex items-center space-x-2">
-                              <code className="bg-muted px-2 py-1 rounded text-sm">
-                                {org.join_code || "No code"}
-                              </code>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(org.join_code || '');
-                                  toast({ title: "Copied to clipboard" });
-                                }}
-                              >
-                                <Copy className="h-3 w-3" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => regenerateJoinCode(org.id)}
-                              >
-                                <RefreshCw className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium">Members:</span>
-                            <span className="text-sm">{org.members?.[0]?.count || 0}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium">Created:</span>
-                            <span className="text-sm">
-                              {new Date(org.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  
-                  {organizations.length === 0 && !loading && (
-                    <div className="col-span-2 text-center py-10">
-                      <p className="text-muted-foreground">No organizations found</p>
-                    </div>
-                  )}
-                  
-                  {loading && (
-                    <div className="col-span-2 text-center py-10">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
-                      <p className="mt-2 text-muted-foreground">Loading organizations...</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="users" className="space-y-4">
-                <div className="bg-card border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-muted">
-                          <th className="px-4 py-3 text-left font-medium">Name</th>
-                          <th className="px-4 py-3 text-left font-medium">Email</th>
-                          <th className="px-4 py-3 text-left font-medium">Joined</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {users.map((user) => (
-                          <tr key={user.id} className="hover:bg-muted/50">
-                            <td className="px-4 py-3">{user.full_name || "N/A"}</td>
-                            <td className="px-4 py-3">{user.email}</td>
-                            <td className="px-4 py-3">
-                              {new Date(user.created_at).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  
-                  {users.length === 0 && !loading && (
-                    <div className="text-center py-10">
-                      <p className="text-muted-foreground">No users found</p>
-                    </div>
-                  )}
-                  
-                  {loading && (
-                    <div className="text-center py-10">
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mx-auto"></div>
-                      <p className="mt-2 text-muted-foreground">Loading users...</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="create">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Create New Organization</CardTitle>
-                    <CardDescription>
-                      Add a new organization to the system
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="org-name">Organization Name</Label>
-                        <Input
-                          id="org-name"
-                          value={orgName}
-                          onChange={(e) => setOrgName(e.target.value)}
-                          placeholder="Enter organization name"
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="org-description">Description (Optional)</Label>
-                        <Textarea
-                          id="org-description"
-                          value={orgDescription}
-                          onChange={(e) => setOrgDescription(e.target.value)}
-                          placeholder="Brief description of the organization"
-                          rows={4}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <Button 
-                      onClick={handleCreateOrganization} 
-                      disabled={loading || !orgName.trim()}
-                      className="w-full"
-                    >
-                      <Building2 className="mr-2 h-4 w-4" />
-                      Create Organization
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </main>
+          </DialogContent>
+        </Dialog>
       </div>
+
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : organizations.length === 0 ? (
+        <div className="text-center py-12">
+          <h2 className="text-xl font-semibold mb-2">No Organizations Found</h2>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">
+            Get started by creating your first organization.
+          </p>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Create Organization
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {organizations.map((org) => (
+            <Card key={org.id} className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-xl">{org.name}</CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => deleteOrganization(org.id)}
+                    className="h-8 w-8 text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {org.description || 'No description provided'}
+                </p>
+                
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    {org.member_count} {org.member_count === 1 ? 'Member' : 'Members'}
+                  </Badge>
+                  <div className="text-xs text-gray-500">
+                    Created: {new Date(org.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+                
+                <div className="pt-2 flex items-center space-x-2">
+                  <div className="bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded text-sm font-mono flex-1 truncate">
+                    {org.join_code}
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => copyJoinCode(org.join_code)}
+                    className="h-8 w-8"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

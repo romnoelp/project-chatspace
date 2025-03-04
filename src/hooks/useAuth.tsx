@@ -24,6 +24,9 @@ type Organization = {
   name: string;
   description: string | null;
   join_code: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  created_by: string | null;
 };
 
 type OrganizationMember = {
@@ -163,9 +166,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       
+      // Ensure the data is properly typed before setting it
       const typedData = data?.map(item => ({
         ...item,
-        role: item.role as 'admin' | 'member' // Cast to ensure type compatibility
+        role: item.role as 'admin' | 'member',
+        // Make sure organization includes all required fields including join_code
+        organization: item.organization ? {
+          ...item.organization,
+          join_code: item.organization.join_code || null
+        } : undefined
       })) || [];
       
       setOrganizationMemberships(typedData);

@@ -28,8 +28,13 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     return <Navigate to="/domain-restricted" replace />;
   }
   
-  // If global admin and trying to access admin panel, allow it
+  // If global admin, allow access to admin dashboard
   if (isGlobalAdmin && location.pathname === '/admin') {
+    return <>{children}</>;
+  }
+  
+  // If global admin trying to access dashboard, allow it
+  if (isGlobalAdmin && (location.pathname === '/dashboard' || location.pathname === '/projects')) {
     return <>{children}</>;
   }
   
@@ -38,12 +43,12 @@ const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
     return <Navigate to="/organization-onboarding" replace />;
   }
 
-  // If admin trying to access dashboard, allow
-  if (isGlobalAdmin) {
-    return <>{children}</>;
+  // If user has an organization and they're trying to access the onboarding page, redirect to dashboard
+  if (hasOrganization && location.pathname.includes('/organization-onboarding')) {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  // Regular user with organization can access dashboard
+  // Regular user with organization can access dashboard and projects
   if (hasOrganization) {
     return <>{children}</>;
   }
